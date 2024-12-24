@@ -16,8 +16,8 @@ document.getElementById('loginForm').addEventListener('submit', async function (
       const result = await response.json();
       if (response.ok) {
         alert('Login successful!');
-        // Save token to local storage or cookie if necessary
-        localStorage.setItem('authToken', result.token); 
+        // Save token to local storage or cookie
+        localStorage.setItem('authToken', result.token);
         window.location.href = '/dashboard.html'; // Redirect to dashboard or home page
       } else {
         alert(`Error: ${result.message}`);
