@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const chatWindow = document.getElementById('chatWindow');
   const chatMessage = document.getElementById('chatMessage');
   const sendMessage = document.getElementById('sendMessage');
+  const maxStoredChats = 10; // Store a maximum of 10 chats in local storage
 
   if (!token) {
     alert('Unauthorized access. Please log in.');
@@ -11,50 +12,66 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  const loadDashboardData = async () => {
+  const saveMessagesToLocal = (messages) => {
+    const storedMessages = JSON.parse(localStorage.getItem('chatMessages')) || [];
+    const allMessages = [...storedMessages, ...messages];
+    
+    // Keep only the last 10 messages
+    const trimmedMessages = allMessages.slice(-maxStoredChats);
+    localStorage.setItem('chatMessages', JSON.stringify(trimmedMessages));
+  };
+
+  const loadMessagesFromLocal = () => {
+    const storedMessages = JSON.parse(localStorage.getItem('chatMessages')) || [];
+    chatWindow.innerHTML = ''; // Clear previous messages
+    storedMessages.forEach((msg) => {
+      const p = document.createElement('p');
+      p.textContent = `${msg.sender}: ${msg.message}`;
+      chatWindow.appendChild(p);
+    });
+    return storedMessages.length > 0 ? storedMessages[storedMessages.length - 1].id : null; // Return the ID of the last stored message
+  };
+
+  const fetchNewMessages = async (lastMessageId) => {
     try {
-      const response = await fetch('/messages/dashboard/data', {
+      const response = await fetch(`/messages/dashboard/data?lastMessageId=${lastMessageId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-  
-      const rawData = await response.text(); // Fetch raw text
-      //console.log(rawData); // Log the raw response
-      
-      if (!response.ok) throw new Error('Failed to fetch dashboard data');
-  
-      const data = JSON.parse(rawData); // Parse as JSON
-      
-      // Clear previous data
-      userList.innerHTML = '';
-      chatWindow.innerHTML = '';
-  
-      // Render user list
-      data.users.forEach((user) => {
-        const li = document.createElement('li');
-        li.textContent = user.name;
-        userList.appendChild(li);
-      });
-  
-      // Render chat messages
-      data.messages.forEach((msg) => {
-        const p = document.createElement('p');
-        p.textContent = `${msg.sender}: ${msg.message}`;
-        chatWindow.appendChild(p);
-      });
+      if (!response.ok) throw new Error('Failed to fetch new messages');
+      return await response.json();
     } catch (err) {
       console.error(err);
-      alert('Failed to load dashboard data.');
+      alert('Failed to fetch new messages.');
+      return { users: [], messages: [] }; // Return empty data in case of error
     }
   };
-  
+
+  const loadDashboardData = async () => {
+    const lastMessageId = loadMessagesFromLocal(); // Load messages from local storage and get the last message ID
+    const { users, messages } = await fetchNewMessages(lastMessageId); // Fetch new messages from the backend
+    
+    // Update user list
+    userList.innerHTML = ''; // Clear previous user list
+    users.forEach((user) => {
+      const li = document.createElement('li');
+      li.textContent = user.name;
+      userList.appendChild(li);
+    });
+
+    // Append new messages to local storage and chat window
+    saveMessagesToLocal(messages);
+    loadMessagesFromLocal(); // Reload messages from local storage to show the latest ones
+  };
+
   // Initial load
   await loadDashboardData();
-// Fetch new messages and update the screen
-  // setInterval(async () => {
-  //   await loadDashboardData(); 
-  // }, 1000);
 
-  // Add event listener for sending a message
+  // Poll for new messages every second
+  setInterval(async () => {
+    await loadDashboardData();
+  }, 1000);
+
+  // Send a message
   sendMessage.addEventListener('click', async () => {
     const message = chatMessage.value;
 
@@ -70,10 +87,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         if (!sendResponse.ok) throw new Error('Failed to send message');
-
-        // Refresh chat messages after successful send
-        chatMessage.value = '';
-        await loadDashboardData();
+        chatMessage.value = ''; // Clear input field
+        await loadDashboardData(); // Fetch new messages after sending
       } catch (err) {
         console.error(err);
         alert('Failed to send message.');

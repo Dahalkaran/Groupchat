@@ -1,32 +1,34 @@
+const { Op } = require('sequelize');
 const Message = require('../models/message');
 const User = require('../models/user');
 
 // Fetch all messages and online users
 exports.getDashboard = async (req, res) => {
-
+  console.log('getDashboard endpoint hit');
   try {
+    const lastMessageId = req.query.lastMessageId || 0; // Default to 0 if not provided
+
+    // Fetch users
     const users = await User.findAll({
       attributes: ['id', 'name'],
     });
 
+    // Fetch messages with an ID greater than lastMessageId
     const messages = await Message.findAll({
+      where: {
+        id: { [Op.gt]: lastMessageId }, // Sequelize's greater-than operator
+      },
       include: {
         model: User,
         attributes: ['name','id'],
       },
     });
 
-    const formattedMessages = [];
-    for (const msg of messages) {
-      console.log(msg.User.id + " "+ req.user.userId);
-      const senderName = msg.User.id === req.user.userId ? 'you' : msg.User.name;
-      console.log(senderName);
-      formattedMessages.push({
-        id: msg.id,
-        sender: senderName,
-        message: msg.message,
-      });
-    }
+    const formattedMessages = messages.map((msg) => ({
+      id: msg.id,
+      sender: msg.User.id === req.user.userId ? 'you' : msg.User.name, // Show 'u' for logged-in user's messages
+      message: msg.message,
+    }));
 
     res.status(200).json({
       users,
@@ -37,6 +39,7 @@ exports.getDashboard = async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
 
 // Send a message
 exports.sendMessage = async (req, res) => {
