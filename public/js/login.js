@@ -18,7 +18,9 @@ document.getElementById('loginForm').addEventListener('submit', async function (
         alert('Login successful!');
         // Save token to local storage or cookie
         localStorage.setItem('authToken', result.token);
-        window.location.href = '/dashboard.html'; // Redirect to dashboard or home page
+        //console.log(localStorage.getItem('authToken'));
+        window.location.href = '/dashboard'; 
+      
       } else {
         alert(`Error: ${result.message}`);
       }

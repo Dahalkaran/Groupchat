@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Dashboard</title>
+</head>
+<body>
+  <h1>Welcome to the Chat App</h1>
+  <div>
+    <h2> Users:</h2>
+    <ul id="userList"></ul>
+  </div>
+
+  <div>
+    <h2>Chat Window:</h2>
+    <div id="chatWindow" style="border: 1px solid black; height: 300px; overflow-y: scroll; margin-bottom: 10px;"></div>
+    <input type="text" id="chatMessage" placeholder="Type your message here">
+    <button id="sendMessage">Send</button>
+  </div>
+
+  <!-- Include the external JavaScript file -->
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>
