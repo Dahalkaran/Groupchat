@@ -3,7 +3,7 @@ const User = require('../models/user');
 
 // Fetch all messages and online users
 exports.getDashboard = async (req, res) => {
-  console.log('getDashboard endpoint hit');
+
   try {
     const users = await User.findAll({
       attributes: ['id', 'name'],
@@ -12,15 +12,18 @@ exports.getDashboard = async (req, res) => {
     const messages = await Message.findAll({
       include: {
         model: User,
-        attributes: ['name'],
+        attributes: ['name','id'],
       },
     });
 
     const formattedMessages = [];
     for (const msg of messages) {
+      console.log(msg.User.id + " "+ req.user.userId);
+      const senderName = msg.User.id === req.user.userId ? 'you' : msg.User.name;
+      console.log(senderName);
       formattedMessages.push({
         id: msg.id,
-        sender: msg.User.name,
+        sender: senderName,
         message: msg.message,
       });
     }

@@ -49,6 +49,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Initial load
   await loadDashboardData();
+// Fetch new messages and update the screen
+  // setInterval(async () => {
+  //   await loadDashboardData(); 
+  // }, 1000);
 
   // Add event listener for sending a message
   sendMessage.addEventListener('click', async () => {
