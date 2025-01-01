@@ -20,6 +20,14 @@ const Message = sequelize.define('Message', {
     },
     allowNull: false,
   },
+  groupId: {
+    type: DataTypes.INTEGER,
+    references: {
+      model: 'Groups', 
+      key: 'id',
+    },
+    allowNull: true, 
+  },
 });
 
 User.hasMany(Message, { foreignKey: 'userId' });

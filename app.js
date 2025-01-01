@@ -12,23 +12,22 @@ const app = express();
 
 app.use(
   cors({
-    origin: 'http://localhost:3000', // Allow requests from your frontend
-    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Allowed HTTP methods
-    allowedHeaders: ['Content-Type', 'Authorization'], // Include Authorization header
-    credentials: true, // Allow cookies to be sent with requests
+    origin: 'http://localhost:3000', 
+    methods: ['GET', 'POST', 'PUT', 'DELETE'], 
+    allowedHeaders: ['Content-Type', 'Authorization'], 
+    credentials: true,
   })
 );
 
 app.use(express.json());
 app.use(express.static('public'));
-
+app.use(express.static(path.join(__dirname, 'views')));
 // Routes
 app.use('/users', userRoutes);
-app.use('/messages', messageRoutes);
-app.get('/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'dashboard.html'));
-});
+app.use('/', messageRoutes);
+
 // Sync database and start server
+//{ force: true }
 sequelize
   .sync()
   .then(() => {

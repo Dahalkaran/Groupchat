@@ -4,16 +4,40 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chat Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
 </head>
 <body>
   <h1>Welcome to the Chat App</h1>
+
+  <!-- User List -->
   <div>
-    <h2> Users:</h2>
+    <h2>Users:</h2>
     <ul id="userList"></ul>
   </div>
 
+  <!-- Groups Section -->
+  <div>
+    <h2>Your Groups</h2>
+    <ul id="groupList"></ul>
+    <input type="text" id="groupName" placeholder="Group Name">
+    <button id="createGroup">Create Group</button>
+  </div>
+
+  <!-- Invite User to Group -->
+  <div>
+    <h3>Invite Users to Group</h3>
+    <select id="userSelect">
+      <option value="">Select User</option>
+    </select>
+    <button id="inviteUser">Invite</button>
+  </div>
+
+  <!-- Chat Window -->
   <div>
     <h2>Chat Window:</h2>
+    <div id="currentGroupName"></div>
+
     <div id="chatWindow" style="border: 1px solid black; height: 300px; overflow-y: scroll; margin-bottom: 10px;"></div>
     <input type="text" id="chatMessage" placeholder="Type your message here">
     <button id="sendMessage">Send</button>

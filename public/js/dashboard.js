@@ -1,10 +1,17 @@
 document.addEventListener('DOMContentLoaded', async () => {
   const token = localStorage.getItem('authToken');
   const userList = document.getElementById('userList');
+  const groupList = document.getElementById('groupList');
   const chatWindow = document.getElementById('chatWindow');
   const chatMessage = document.getElementById('chatMessage');
   const sendMessage = document.getElementById('sendMessage');
-  const maxStoredChats = 10; // Store a maximum of 10 chats in local storage
+  const createGroupButton = document.getElementById('createGroup');
+  const groupNameInput = document.getElementById('groupName');
+  const userSelect = document.getElementById('userSelect');
+  const maxStoredChats = 10; // Store a maximum of 10 chats per group in local storage
+  let selectedGroupId = null;
+  let lastMessageId = null;
+  let messageFetchInterval = null; // Variable to store the interval ID
 
   if (!token) {
     alert('Unauthorized access. Please log in.');
@@ -12,87 +19,175 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  const saveMessagesToLocal = (messages) => {
-    const storedMessages = JSON.parse(localStorage.getItem('chatMessages')) || [];
-    const allMessages = [...storedMessages, ...messages];
-    
-    // Keep only the last 10 messages
-    const trimmedMessages = allMessages.slice(-maxStoredChats);
-    localStorage.setItem('chatMessages', JSON.stringify(trimmedMessages));
+  const fetchUsers = async () => {
+    try {
+      const response = await axios.get('/users', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const { users } = response.data;
+      userSelect.innerHTML = '<option value="">Select User</option>';
+
+      users.forEach((user) => {
+        const option = document.createElement('option');
+        option.value = user.id;
+        option.textContent = user.name;
+        userSelect.appendChild(option);
+      });
+    } catch (err) {
+      console.error(err);
+      alert('Failed to load users.');
+    }
   };
 
-  const loadMessagesFromLocal = () => {
-    const storedMessages = JSON.parse(localStorage.getItem('chatMessages')) || [];
-    chatWindow.innerHTML = ''; // Clear previous messages
+  const saveMessagesToLocal = (groupId, messages) => {
+    const storedMessages = JSON.parse(localStorage.getItem(`chatMessages_${groupId}`)) || [];
+    const existingMessageIds = new Set(storedMessages.map((msg) => msg.id));
+    const newMessages = messages.filter((msg) => !existingMessageIds.has(msg.id));
+    const allMessages = [...storedMessages, ...newMessages];
+    const trimmedMessages = allMessages.slice(-maxStoredChats);
+    localStorage.setItem(`chatMessages_${groupId}`, JSON.stringify(trimmedMessages));
+  };
+
+  const loadMessagesFromLocal = (groupId) => {
+    const storedMessages = JSON.parse(localStorage.getItem(`chatMessages_${groupId}`)) || [];
+    chatWindow.innerHTML = '';
     storedMessages.forEach((msg) => {
       const p = document.createElement('p');
       p.textContent = `${msg.sender}: ${msg.message}`;
       chatWindow.appendChild(p);
     });
-    return storedMessages.length > 0 ? storedMessages[storedMessages.length - 1].id : null; // Return the ID of the last stored message
+    return storedMessages.length > 0 ? storedMessages[storedMessages.length - 1].id : null;
   };
 
-  const fetchNewMessages = async (lastMessageId) => {
+  const fetchNewMessages = async (groupId, lastMessageId) => {
     try {
-      const response = await fetch(`/messages/dashboard/data?lastMessageId=${lastMessageId}`, {
+      const response = await axios.get(`/groups/messages/${groupId}`, {
         headers: { Authorization: `Bearer ${token}` },
+        params: { lastMessageId },
       });
-      if (!response.ok) throw new Error('Failed to fetch new messages');
-      return await response.json();
+      return response.data;
     } catch (err) {
       console.error(err);
       alert('Failed to fetch new messages.');
-      return { users: [], messages: [] }; // Return empty data in case of error
+      return { messages: [] };
     }
   };
 
-  const loadDashboardData = async () => {
-    const lastMessageId = loadMessagesFromLocal(); // Load messages from local storage and get the last message ID
-    const { users, messages } = await fetchNewMessages(lastMessageId); // Fetch new messages from the backend
-    
-    // Update user list
-    userList.innerHTML = ''; // Clear previous user list
-    users.forEach((user) => {
-      const li = document.createElement('li');
-      li.textContent = user.name;
-      userList.appendChild(li);
-    });
+  const fetchGroups = async () => {
+    try {
+      const response = await axios.get('/groups', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const { groups } = response.data;
 
-    // Append new messages to local storage and chat window
-    saveMessagesToLocal(messages);
-    loadMessagesFromLocal(); // Reload messages from local storage to show the latest ones
+      groupList.innerHTML = '';
+      if (groups.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = 'No groups available. Create a group!';
+        groupList.appendChild(li);
+      } else {
+        groups.forEach((group) => {
+          const li = document.createElement('li');
+          li.textContent = group.name;
+          li.addEventListener('click', () => selectGroup(group.id, group.name));
+          groupList.appendChild(li);
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to load groups.');
+    }
   };
 
-  // Initial load
-  await loadDashboardData();
+  const selectGroup = async (groupId, groupName) => {
+    selectedGroupId = groupId;
+    document.getElementById('currentGroupName').textContent = `Chatting in: ${groupName}`;
+    chatWindow.innerHTML = ''; // Clear previous messages
+    lastMessageId = loadMessagesFromLocal(groupId);
+  
+    // Start fetching new messages
+    setInterval(async () => {
+      if (!selectedGroupId) return;
+      const { messages } = await fetchNewMessages(groupId, lastMessageId);
+      if (messages.length > 0) {
+        saveMessagesToLocal(groupId, messages);
+        lastMessageId = messages[messages.length - 1].id;
+        loadMessagesFromLocal(groupId);
+      }
+    }, 2000); // Adjust polling interval as needed
+  };
+  createGroupButton.addEventListener('click', async () => {
+    const name = groupNameInput.value.trim();
+    if (!name) return alert('Group name is required');
 
-  // Poll for new messages every second
-  setInterval(async () => {
-    await loadDashboardData();
-  }, 1000);
-
-  // Send a message
-  sendMessage.addEventListener('click', async () => {
-    const message = chatMessage.value;
-
-    if (message.trim()) {
-      try {
-        const sendResponse = await fetch('/messages/send', {
-          method: 'POST',
+    try {
+      await axios.post(
+        '/groups/create',
+        { name },
+        {
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ message }),
-        });
+        }
+      );
+      groupNameInput.value = '';
+      await fetchGroups();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to create group.');
+    }
+  });
 
-        if (!sendResponse.ok) throw new Error('Failed to send message');
-        chatMessage.value = ''; // Clear input field
-        await loadDashboardData(); // Fetch new messages after sending
+  sendMessage.addEventListener('click', async () => {
+    const message = chatMessage.value;
+    if (!selectedGroupId) {
+      alert('Please select a group to send a message.');
+      return;
+    }
+    if (message.trim()) {
+      try {
+        await axios.post(
+          `/groups/messages`,
+          { message, groupId: selectedGroupId },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        chatMessage.value = '';
       } catch (err) {
         console.error(err);
         alert('Failed to send message.');
       }
     }
   });
+
+  // Invite a user to the selected group
+  document.getElementById('inviteUser').addEventListener('click', async () => {
+    const userId = userSelect.value;
+    if (!userId) {
+      return alert('Please select a user to invite');
+    }
+    if (!selectedGroupId) {
+      return alert('Please select a group first.');
+    }
+    try {
+      const response = await axios.post(
+        '/groups/invite',
+        { groupId: selectedGroupId, userId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      alert(response.data.message || 'User invited successfully');
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Failed to invite user');
+    }
+  });
+
+  // Initial load of users and groups
+  await fetchUsers();
+  await fetchGroups();
 });
