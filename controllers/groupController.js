@@ -368,29 +368,29 @@ exports.searchUsers = async (req, res) => {
 };
 
 exports.removeUserFromGroup = async (req, res) => {
-  const transaction = await sequelize.transaction();
   try {
+   
     const { groupId, userId } = req.body;
-
-    const group = await Group.findByPk(groupId, { transaction });
+     
+    const group = await Group.findByPk(groupId);
     if (!group) {
       return res.status(404).json({ message: 'Group not found' });
     }
+    //console.log(group);
 
     // Check if the requester is an admin of the group
     const isAdmin = await GroupMember.findOne({
       where: { groupId, userId: req.user.userId, isAdmin: true },
-      transaction, // Pass transaction here
     });
+    
+    console.log(isAdmin);
 
     if (!isAdmin) {
       return res.status(403).json({ message: 'Only admins can remove users' });
     }
-
     // Check if the user to be removed is part of the group
     const userInGroup = await GroupMember.findOne({
       where: { groupId, userId },
-      transaction, // Pass transaction here
     });
 
     if (!userInGroup) {
@@ -398,13 +398,10 @@ exports.removeUserFromGroup = async (req, res) => {
     }
 
     // Remove the user from the group
-    await GroupMember.destroy({ where: { groupId, userId }, transaction });
-
-    await transaction.commit();  // Commit the transaction
+    await GroupMember.destroy({ where: { groupId, userId } });
 
     res.status(200).json({ message: 'User removed from group successfully' });
   } catch (err) {
-    await transaction.rollback();  // Rollback the transaction on error
     console.error('Error in removing user from group:', err);
     res.status(500).json({ message: 'Internal server error' });
   }
