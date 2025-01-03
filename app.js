@@ -19,21 +19,24 @@ app.use(
   })
 );
 
+app.use(bodyParser.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(express.static('public'));
 app.use(express.static(path.join(__dirname, 'views')));
 // Routes
 app.use('/users', userRoutes);
 app.use('/', messageRoutes);
+app.use((req,res)=>{
+  res.sendFile('login.html', { root: './views' });
+})
 
 // Sync database and start server
 //{ force: true }
-sequelize
-  .sync()
+const PORT = process.env.PORT || 3000;
+sequelize.sync()
   .then(() => {
     console.log('Database synced');
-    app.listen(3000, () => {
-      console.log('Server running on http://localhost:3000');
+    app.listen(PORT, () => {
+      console.log('Server is running on http://localhost:3000');
     });
-  })
-  .catch((err) => console.error('Error syncing database:', err));
+  });
