@@ -20,6 +20,11 @@ const GroupMember = sequelize.define('GroupMember', {
     },
     allowNull: false,
   },
+
+  isAdmin: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false, // Non-admin by default
+  },
 });
 
 Group.hasMany(GroupMember, { foreignKey: 'groupId' });

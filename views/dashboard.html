@@ -9,13 +9,6 @@
 </head>
 <body>
   <h1>Welcome to the Chat App</h1>
-
-  <!-- User List -->
-  <div>
-    <h2>Users:</h2>
-    <ul id="userList"></ul>
-  </div>
-
   <!-- Groups Section -->
   <div>
     <h2>Your Groups</h2>
@@ -25,7 +18,7 @@
   </div>
 
   <!-- Invite User to Group -->
-  <div>
+  <div id="inviteSection">
     <h3>Invite Users to Group</h3>
     <select id="userSelect">
       <option value="">Select User</option>
@@ -37,7 +30,13 @@
   <div>
     <h2>Chat Window:</h2>
     <div id="currentGroupName"></div>
-
+    <div>
+      <h3>Group Members</h3>
+      <ul id="groupMembersList"></ul>
+    </div>
+    <div>
+      <ul id="userList"></ul>
+    </div>
     <div id="chatWindow" style="border: 1px solid black; height: 300px; overflow-y: scroll; margin-bottom: 10px;"></div>
     <input type="text" id="chatMessage" placeholder="Type your message here">
     <button id="sendMessage">Send</button>

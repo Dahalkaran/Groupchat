@@ -34,6 +34,21 @@ router.get('/groups/messages/:groupId', verifyToken, groupController.getGroupMes
 // Send a message to a specific group
 router.post('/groups/messages', verifyToken, groupController.sendGroupMessage);
 
+// Get members of a specific group
+router.get('/groups/members/:groupId', verifyToken, groupController.getGroupMembers);
 
-router.get('/users',  groupController.getAllUsers);
+// Make a user an admin in a group
+router.post('/groups/make-admin', verifyToken, groupController.makeAdmin);
+
+// Remove a user from a group
+router.post('/groups/remove-user', verifyToken, groupController.removeUserFromGroup);
+
+// Revoke admin rights from a user in a group
+router.post('/groups/revoke-admin', verifyToken, groupController.deleteAdmin);
+
+// Route to fetch all users
+router.get('/users', verifyToken, groupController.getAllUsers);
+
+// Route to search for users
+router.get('/users/search', verifyToken, groupController.searchUsers);
 module.exports = router;
