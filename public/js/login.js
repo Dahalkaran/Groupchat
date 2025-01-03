@@ -5,7 +5,7 @@ document.getElementById('loginForm').addEventListener('submit', async function (
   const password = document.getElementById('password').value;
 
   try {
-    const response = await axios.post('http://localhost:3000/users/login', {
+    const response = await axios.post('/users/login', {
       email,
       password,
     });
