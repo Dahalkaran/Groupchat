@@ -2,7 +2,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
 require('dotenv').config();
-
+const sequelize = require('../config/database');
 const JWT_SECRET = process.env.JWT_SECRET;
 
 exports.signup = async (req, res) => {

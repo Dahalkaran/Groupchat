@@ -3,7 +3,7 @@ const GroupMember = require('../models/groupMember');
 const Message = require('../models/message');
 const User = require('../models/user');
 const { Op } = require('sequelize');
-
+const sequelize = require('../config/database');
 // Create a new group
 exports.createGroup = async (req, res) => {
   const transaction = await sequelize.transaction();
