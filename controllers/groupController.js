@@ -4,7 +4,9 @@ const Message = require('../models/message');
 const User = require('../models/user');
 const { Op } = require('sequelize');
 const sequelize = require('../config/database');
+//const { io } = require('../socket.js');
 // Create a new group
+//console.log(io);
 exports.createGroup = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
@@ -38,6 +40,15 @@ exports.createGroup = async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+exports.usersName= async(req,res)=>{
+  try {
+    const user = await User.findByPk(req.params.userId);  // Assuming you are using Sequelize
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ name: user.name }); // Send the user name back
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+}
 
 exports.getGroupMembers = async (req, res) => {
   try {
@@ -76,11 +87,9 @@ exports.inviteToGroup = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
     const { groupId, userId } = req.body;
-
     const group = await Group.findByPk(groupId, { transaction });
     if (!group) return res.status(404).json({ message: 'Group not found' });
 
-    // Check if the user making the request is an admin
     const isAdmin = await GroupMember.findOne({
       where: { groupId, userId: req.user.userId, isAdmin: true },
       transaction,
@@ -93,17 +102,21 @@ exports.inviteToGroup = async (req, res) => {
 
     await GroupMember.create({ groupId, userId }, { transaction });
 
-    // Commit the transaction
-    await transaction.commit();
+    // Emit to all members that a new user was added
+    io.to(groupId).emit('userInvited', {
+      userId,
+      groupId,
+    });
 
+    await transaction.commit();
     res.status(201).json({ message: 'User added to group' });
   } catch (err) {
-    // Rollback the transaction if there's an error
     await transaction.rollback();
     console.error(err);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
 // Make a user an admin in the group (Only admins can do this)
 exports.makeAdmin = async (req, res) => {
   const transaction = await sequelize.transaction();
@@ -194,7 +207,7 @@ exports.getGroups = async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
-// Fetch members of a group with their roles
+
 // Fetch members of a group with their roles
 exports.getGroupMembers = async (req, res) => {
   const transaction = await sequelize.transaction();
@@ -241,6 +254,8 @@ exports.getGroupMembers = async (req, res) => {
 // Fetch messages for a group
 exports.getGroupMessages = async (req, res) => {
   const transaction = await sequelize.transaction();
+  let isTransactionCommitted = false;
+
   try {
     const { groupId } = req.params;
 
@@ -263,6 +278,7 @@ exports.getGroupMessages = async (req, res) => {
 
     // Commit the transaction if everything goes smoothly
     await transaction.commit();
+    isTransactionCommitted = true;
 
     // Respond with the messages
     res.status(200).json({
@@ -272,44 +288,84 @@ exports.getGroupMessages = async (req, res) => {
         message: msg.message,
       })),
     });
+
+    // Socket join logic should happen before sending the response
+    const socketId = req.user.socketId;
+    if (socketId) {
+      const socket = io.sockets.connected[socketId];
+      if (socket) {
+        socket.join(groupId); // Ensure user is in the group for real-time updates
+      }
+    }
   } catch (err) {
-    // Rollback the transaction if there's an error
-    await transaction.rollback();
+    // Only attempt to rollback if the transaction has not been committed
+    if (!isTransactionCommitted) {
+      await transaction.rollback();
+    }
     console.error(err);
-    res.status(500).json({ message: 'Internal server error' });
+
+    // Make sure the response is not sent if an error occurs after it's already been sent
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Internal server error' });
+    }
   }
 };
-
 
 // Send a message to a group
 exports.sendGroupMessage = async (req, res) => {
   const transaction = await sequelize.transaction();
+  let isTransactionCommitted = false;
+
   try {
     const { message, groupId } = req.body;
     const userId = req.user.userId;
 
     if (!message || !groupId) {
+      await transaction.rollback(); // Rollback on invalid input
       return res.status(400).json({ message: 'Message and groupId are required' });
     }
 
+    // Check if the user is a member of the group
     const isMember = await GroupMember.findOne({ where: { groupId, userId }, transaction });
-    if (!isMember) return res.status(403).json({ message: 'Unauthorized access to group' });
+    if (!isMember) {
+      await transaction.rollback(); // Rollback if unauthorized
+      return res.status(403).json({ message: 'Unauthorized access to group' });
+    }
 
-    const newMessage = await Message.create({
-      message,
-      groupId,
-      userId,
-    }, { transaction });
+    // Save the message to the database
+    const newMessage = await Message.create(
+      { message, groupId, userId },
+      { transaction }
+    );
 
-    await transaction.commit();  // Commit the transaction
+    await transaction.commit();
+    isTransactionCommitted = true;
+
+    // Emit the message to the group using socket.io
+    if (io) {
+      io.to(groupId).emit('newMessage', {
+        id: newMessage.id,
+        message: newMessage.message,
+        sender: req.user.name,
+        groupId: newMessage.groupId,
+        userId: newMessage.userId,
+        createdAt: newMessage.createdAt, // Include timestamp for real-time updates
+      });
+    } else {
+      console.error('Socket.io instance is not available');
+    }
 
     res.status(201).json({ message: 'Message sent successfully', newMessage });
   } catch (err) {
-    await transaction.rollback();  // Rollback the transaction on error
+    if (!isTransactionCommitted) {
+      await transaction.rollback();
+    }
     console.error(err);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+
 
 
 // Fetch all users

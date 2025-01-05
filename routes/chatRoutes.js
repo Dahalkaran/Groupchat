@@ -1,5 +1,5 @@
 const express = require('express');
-const { verifyToken } = require('../middleware/authMiddleware');
+const { verifyToken , socketAuth } = require('../middleware/authMiddleware');
 const messageController = require('../controllers/messageController');
 const groupController = require('../controllers/groupController'); // Import groupController
 const path = require('path');
@@ -20,7 +20,7 @@ router.post('/send', verifyToken, messageController.sendMessage);
 // Group chat routes
 
 // Create a new group
-router.post('/groups/create', verifyToken, groupController.createGroup);
+router.post('/groups/create', verifyToken , groupController.createGroup);
 
 // Invite a user to a group
 router.post('/groups/invite', verifyToken, groupController.inviteToGroup);
@@ -51,4 +51,6 @@ router.get('/users', verifyToken, groupController.getAllUsers);
 
 // Route to search for users
 router.get('/users/search', verifyToken, groupController.searchUsers);
+
+router.get('/users/:userId',verifyToken,groupController.usersName);
 module.exports = router;

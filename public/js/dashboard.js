@@ -1,3 +1,4 @@
+//import {io} from "socket.io-client"
 document.addEventListener('DOMContentLoaded', async () => {
   const token = localStorage.getItem('authToken');
   if (!token) {
@@ -5,7 +6,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.location.href = '/users/login';
     return;
   }
-
+ 
   const userList = document.getElementById('userList');
   const groupList = document.getElementById('groupList');
   const chatWindow = document.getElementById('chatWindow');
@@ -19,7 +20,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   let selectedGroupId = null;
   let lastMessageId = null;
   let messageFetchInterval = null;
-
+  const socket = io('http://localhost:3000', {
+    auth: { token },
+  });
+  //console.log(socket)
   inviteSection.style.display = 'none';
 
   const fetchUsers = async () => {
@@ -27,7 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const response = await axios.get('/users', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      console.log(response.data)
+     // console.log(response.data)
       const { users } = response.data;
       userSelect.innerHTML = '<option value="">Select User</option>';
       users.forEach((user) => {
@@ -45,37 +49,37 @@ document.addEventListener('DOMContentLoaded', async () => {
   const saveMessagesToLocal = (groupId, messages) => {
     const storedMessages = JSON.parse(localStorage.getItem(`chatMessages_${groupId}`)) || [];
     const existingMessageIds = new Set(storedMessages.map((msg) => msg.id));
+  
     const newMessages = messages.filter((msg) => !existingMessageIds.has(msg.id));
-    const allMessages = [...storedMessages, ...newMessages];
+  
+    const formattedMessages = newMessages.map((msg) => ({
+      id: msg.id,
+      message: msg.message,
+      sender: msg.sender ,//|| 'Unknown', // Ensure sender is always present
+      groupId: msg.groupId,
+      createdAt: msg.createdAt || new Date().toISOString(), // Ensure createdAt is set
+    }));
+     console.log(formattedMessages);
+    const allMessages = [...storedMessages, ...formattedMessages];
     const trimmedMessages = allMessages.slice(-maxStoredChats);
     localStorage.setItem(`chatMessages_${groupId}`, JSON.stringify(trimmedMessages));
   };
-
+  
   const loadMessagesFromLocal = (groupId) => {
     const storedMessages = JSON.parse(localStorage.getItem(`chatMessages_${groupId}`)) || [];
     chatWindow.innerHTML = '';
+  
     storedMessages.forEach((msg) => {
       const p = document.createElement('p');
-      p.textContent = `${msg.sender}: ${msg.message}`;
+      const sender = msg.sender ;//|| 'Unknown'; // Fallback for undefined sender
+      p.textContent = `${sender}: ${msg.message}`;
       chatWindow.appendChild(p);
     });
+  
     return storedMessages.length > 0 ? storedMessages[storedMessages.length - 1].id : null;
   };
-
-  const fetchNewMessages = async (groupId, lastMessageId) => {
-    try {
-      const response = await axios.get(`/groups/messages/${groupId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { lastMessageId },
-      });
-      return response.data;
-    } catch (err) {
-      console.error(err);
-      alert('Failed to fetch new messages.');
-      return { messages: [] };
-    }
-  };
-
+  
+  
   const fetchGroups = async () => {
     try {
       const response = await axios.get('/groups', {
@@ -202,31 +206,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   };
   
+  const fetchNewMessages = async (groupId) => {
+    try {
+      const response = await axios.get(`/groups/messages/${groupId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+  
+      // Save fetched messages to local storage
+      saveMessagesToLocal(groupId, response.data.messages);
+  
+      // Load messages into the chat window
+      loadMessagesFromLocal(groupId);
+  
+      return response.data.messages;
+    } catch (err) {
+      console.error(err);
+      alert('Failed to fetch new messages.');
+      return [];
+    }
+  };
+  
+
+  
  
   const selectGroup = async (groupId, groupName) => {
     inviteSection.style.display = 'block';
-    if (messageFetchInterval) clearInterval(messageFetchInterval);
     selectedGroupId = groupId;
     document.getElementById('currentGroupName').textContent = `Chatting in: ${groupName}`;
     chatWindow.innerHTML = '';
-    
-    //console.log(`Selected Group ID: ${selectedGroupId}`);
   
     lastMessageId = loadMessagesFromLocal(groupId);
   
-    // Fetch and display group members
-    await fetchGroupMembers(groupId); // Ensure this function exists
+    socket.emit('joinGroup', groupId); // Join the group room in socket.io
   
-    messageFetchInterval = setInterval(async () => {
-      if (!selectedGroupId) return;
-      const { messages } = await fetchNewMessages(groupId, lastMessageId);
-      //console.log(`Fetched Messages:`, messages); // Debugging response
-      if (messages.length > 0) {
-        saveMessagesToLocal(groupId, messages);
-        lastMessageId = messages[messages.length - 1].id;
-        loadMessagesFromLocal(groupId);
-      }
-    }, 1000);
+    await fetchGroupMembers(groupId);
+  
+    const messages = await fetchNewMessages(groupId); // Fetch messages when selecting a group
+    if (messages.length > 0) {
+      lastMessageId = messages[messages.length - 1].id; // Update lastMessageId
+    }
   };
   
 
@@ -288,8 +306,30 @@ document.addEventListener('DOMContentLoaded', async () => {
       alert(err.response?.data?.message || 'Failed to invite user');
     }
   });
+  socket.on('newMessage', async (message) => {
+    //console.log('New message received via socket:', message);
+    
+    // Fetch sender's details based on userId
+    try {
+      const response = await axios.get(`/users/${message.userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+  
+      const sender = response.data.name;  // Assuming the response contains the sender's name
+      if (selectedGroupId === message.groupId) {
+        // Save the message with the sender's name
+        saveMessagesToLocal(message.groupId, [{ ...message, sender }]); // Ensure sender is saved
+        lastMessageId = message.id; // Set lastMessageId to the ID of the new message
+        loadMessagesFromLocal(message.groupId);
+      }
+    } catch (err) {
+      console.error('Failed to fetch sender details:', err);
+      alert('Failed to load sender information.');
+    }
+  });
+  
   
 
   await fetchUsers();
   await fetchGroups();
-});
+});   

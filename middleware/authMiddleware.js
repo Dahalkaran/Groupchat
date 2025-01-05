@@ -19,3 +19,20 @@ exports.verifyToken = (req, res, next) => {
     return res.status(401).json({ message: 'Invalid token' });
   }
 };
+exports.socketAuth = (socket, next) => {
+  const token = socket.handshake.auth?.token;
+ // console.log('Socket Auth Token:', token); // Debugging token reception
+  if (!token) {
+    return next(new Error('Authentication error: No token provided'));
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    console.log('Decoded Token:', decoded); // Debugging token decoding
+    socket.user = decoded;
+    next();
+  } catch (err) {
+    console.error('Token verification error:', err); // Debugging errors
+    next(new Error('Authentication error: Invalid token'));
+  }
+};
