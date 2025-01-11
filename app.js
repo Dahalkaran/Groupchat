@@ -5,6 +5,9 @@ const sequelize = require('./config/database');
 const userRoutes = require('./routes/userRoutes');
 const messageRoutes = require('./routes/chatRoutes');
 const path = require('path');
+//const cronJob = require('./cronJob');
+// server.js or app.js
+require('./cronjob');
 const http = require('http');
 require('dotenv').config();
 const { socketAuth } = require('./middleware/authMiddleware');
