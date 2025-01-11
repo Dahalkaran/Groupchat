@@ -25,7 +25,7 @@ toggleUpload.addEventListener('click', () => {
   fileInput.style.display = uploadMode ? 'block' : 'none';
   toggleUpload.textContent = uploadMode ? 'Switch to Message' : 'Upload';
 });
-  const socket = io('http://localhost:3000', {
+  const socket = io('http://13.238.50.191:3000', {
     auth: { token },
   });
   const fetchUsers = async () => {
