@@ -66,15 +66,32 @@ toggleUpload.addEventListener('click', () => {
   const loadMessagesFromLocal = (groupId) => {
     const storedMessages = JSON.parse(localStorage.getItem(`chatMessages_${groupId}`)) || [];
     chatWindow.innerHTML = '';
+  
     storedMessages.forEach((msg) => {
       const p = document.createElement('p');
-      const sender = msg.sender || 'Unknown'; // Fallback for undefined sender
-      p.textContent = `${sender}: ${msg.message}`;
+      const sender = msg.sender || 'Unknown';
+      const isFile = msg.message.startsWith('https://') || msg.message.startsWith('http://');
+  
+      if (isFile) {
+        const image = document.createElement('img');
+        image.src = msg.message; // Assuming the URL is for an image or file
+        image.alt = 'File preview';
+        image.style.width = '100px';
+        image.style.height = '100px';
+        image.style.objectFit = 'cover';
+        p.innerHTML = `<strong>${sender}</strong>: `;
+        p.appendChild(image);
+      } else {
+        p.textContent = `${sender}: ${msg.message}`;
+      }
+  
       chatWindow.appendChild(p);
     });
   
     return storedMessages.length > 0 ? storedMessages[storedMessages.length - 1].id : null;
   };
+  
+  
   const fetchGroups = async () => {
     try {
       const response = await axios.get('/groups', {
@@ -302,19 +319,30 @@ toggleUpload.addEventListener('click', () => {
     console.log('New message received via socket:', message);
   
     const sender = message.sender || 'Unknown';
+    const isFile = message.message.startsWith('https://') || message.message.startsWith('http://');
+    const p = document.createElement('p');
+  
     if (selectedGroupId === message.groupId) {
       saveMessagesToLocal(message.groupId, [{ ...message, sender }]);
   
-      const isFile = message.message.startsWith('https://') || message.message.startsWith('http://');
-      const p = document.createElement('p');
-      p.innerHTML = isFile
-        ? `<strong>${sender}</strong>: <a href="${message.message}" target="_blank">View File</a>`
-        : `<strong>${sender}</strong>: ${message.message}`;
+      if (isFile) {
+        const image = document.createElement('img');
+        image.src = message.message; // Assuming the URL is for an image or file
+        image.alt = 'File preview';
+        image.style.width = '100px';
+        image.style.height = '100px';
+        image.style.objectFit = 'cover'; // Ensures the image fits nicely
+        p.innerHTML = `<strong>${sender}</strong>: `;
+        p.appendChild(image);
+      } else {
+        p.innerHTML = `<strong>${sender}</strong>: ${message.message}`;
+      }
   
       chatWindow.appendChild(p);
       chatWindow.scrollTop = chatWindow.scrollHeight;
     }
   });
+  
   
   await fetchUsers();
   await fetchGroups();
