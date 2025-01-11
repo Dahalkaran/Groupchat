@@ -4,6 +4,7 @@ const Message = require('../models/message');
 const User = require('../models/user');
 const { Op } = require('sequelize');
 const sequelize = require('../config/database');
+const { uploadToS3 } = require('../servises/S3servises');
 //const { io } = require('../socket.js');
 // Create a new group
 //console.log(io);
@@ -22,16 +23,12 @@ exports.createGroup = async (req, res) => {
       createdBy: req.user.userId,
     }, { transaction });
 
-    // Add the creator as an admin
     await GroupMember.create({
       userId: req.user.userId,
       groupId: group.id,
       isAdmin: true,
     }, { transaction });
-
-    // Commit the transaction
     await transaction.commit();
-
     res.status(201).json({ message: 'Group created successfully', group });
   } catch (err) {
     // Rollback the transaction if there's an error
@@ -315,33 +312,72 @@ exports.getGroupMessages = async (req, res) => {
 exports.sendGroupMessage = async (req, res) => {
   const transaction = await sequelize.transaction();
   let isTransactionCommitted = false;
-
   try {
     const { message, groupId } = req.body;
     const userId = req.user.userId;
-
-    if (!message || !groupId) {
+    const file = req.file;
+    if (!groupId) {
       await transaction.rollback(); // Rollback on invalid input
-      return res.status(400).json({ message: 'Message and groupId are required' });
+      return res.status(400).json({ message: 'groupId is required' });
     }
 
+    // if (!message || !groupId) {
+    //   await transaction.rollback(); // Rollback on invalid input
+    //   return res.status(400).json({ message: 'Message and groupId are required' });
+    // }
+     
     // Check if the user is a member of the group
     const isMember = await GroupMember.findOne({ where: { groupId, userId }, transaction });
     if (!isMember) {
       await transaction.rollback(); // Rollback if unauthorized
       return res.status(403).json({ message: 'Unauthorized access to group' });
     }
+    let newMessage;
 
-    // Save the message to the database
-    const newMessage = await Message.create(
-      { message, groupId, userId },
-      { transaction }
-    );
-
+    // const newMessage = await Message.create(
+    //   { message, groupId, userId },
+    //   { transaction }
+    // );
+    if (file) {
+      // Handle file upload
+      const fileName = `${Date.now()}-${file.originalname}`;
+      const fileUrl = await uploadToS3(file.buffer, fileName);
+      newMessage = await Message.create(
+        {
+          message: fileUrl,
+          groupId,
+          userId,
+        },
+        { transaction }
+      );
+    } else if (message) {
+      // Handle text message
+      newMessage = await Message.create(
+        {
+          message,
+          groupId,
+          userId,
+        },
+        { transaction }
+      );
+    } else {
+      await transaction.rollback(); // Rollback if no message or file
+      return res.status(400).json({ message: 'Either message or file is required' });
+    }
     await transaction.commit();
     isTransactionCommitted = true;
+    //console.log(req.user.name)
+    console.log('Emitting newMessage event:', {
+      id: newMessage.id,
+      message: newMessage.message,
+      sender: req.user.name,
+      groupId: newMessage.groupId,
+      userId: newMessage.userId,
+      createdAt: newMessage.createdAt,
+      //type: file ? 'file' : 'text',
+    });
+    
 
-    // Emit the message to the group using socket.io
     if (io) {
       io.to(groupId).emit('newMessage', {
         id: newMessage.id,
@@ -349,7 +385,8 @@ exports.sendGroupMessage = async (req, res) => {
         sender: req.user.name,
         groupId: newMessage.groupId,
         userId: newMessage.userId,
-        createdAt: newMessage.createdAt, // Include timestamp for real-time updates
+        createdAt: newMessage.createdAt,
+        //type: file ? 'file' : 'text', 
       });
     } else {
       console.error('Socket.io instance is not available');
@@ -364,10 +401,6 @@ exports.sendGroupMessage = async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
-
-
-
-
 // Fetch all users
 exports.getAllUsers = async (req, res) => {
   const transaction = await sequelize.transaction();
@@ -444,21 +477,57 @@ exports.removeUserFromGroup = async (req, res) => {
     if (!isAdmin) {
       return res.status(403).json({ message: 'Only admins can remove users' });
     }
-    // Check if the user to be removed is part of the group
     const userInGroup = await GroupMember.findOne({
       where: { groupId, userId },
     });
-
     if (!userInGroup) {
       return res.status(404).json({ message: 'User is not part of the group' });
     }
-
-    // Remove the user from the group
     await GroupMember.destroy({ where: { groupId, userId } });
 
     res.status(200).json({ message: 'User removed from group successfully' });
   } catch (err) {
     console.error('Error in removing user from group:', err);
     res.status(500).json({ message: 'Internal server error' });
+  }
+};
+exports.upload = async (req, res) => {
+  try {
+    const file = req.file; // Access the uploaded file
+    const { groupId } = req.body; // Access the form data
+    const userId = req.user.userId; // Assuming `req.user` is set by the authenticate middleware
+    if (!file) {
+      return res.status(400).json({ success: false, message: 'No file provided.' });
+    }
+    const fileName = `${Date.now()}-${file.originalname}`;
+    const fileUrl = await uploadToS3(file.buffer, fileName);
+    const newMessage = await Message.create({
+      message: fileUrl, 
+      userId,
+      groupId,
+    });
+    if (io) {
+      
+      console.log(io.to(groupId).emit('newMessage', {
+        id: newMessage.id,
+        message: newMessage.message,
+        sender: req.user.name,
+        groupId: newMessage.groupId,
+        userId: newMessage.userId,
+        createdAt: newMessage.createdAt, // Include timestamp for real-time updates
+      }));
+    } else {
+      console.error('Socket.io instance is not available');
+    }
+    //console.log(newMessage);
+
+    return res.status(201).json({
+      success: true,
+      message: 'File uploaded and saved successfully.',
+      data: newMessage,
+    });
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    res.status(500).json({ success: false, message: 'Internal server error.' });
   }
 };

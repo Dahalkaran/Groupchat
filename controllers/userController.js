@@ -48,12 +48,9 @@ exports.login = async (req, res) => {
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'User not authorized' });  // Incorrect password
     }
-
-    // Step 3: Create JWT token
     const token = jwt.sign(
       { userId: user.id, email: user.email }, 
-      JWT_SECRET,                                 // Token expiry time (1 hour)
-      { expiresIn: '1h' }
+      JWT_SECRET
     );
 
     // Step 4: Commit transaction and send the token to the frontend

@@ -1,5 +1,6 @@
 const express = require('express');
 const { verifyToken , socketAuth } = require('../middleware/authMiddleware');
+const  upload = require('../middleware/upload');
 const messageController = require('../controllers/messageController');
 const groupController = require('../controllers/groupController'); // Import groupController
 const path = require('path');
@@ -32,7 +33,7 @@ router.get('/groups', verifyToken, groupController.getGroups);
 router.get('/groups/messages/:groupId', verifyToken, groupController.getGroupMessages);
 
 // Send a message to a specific group
-router.post('/groups/messages', verifyToken, groupController.sendGroupMessage);
+router.post('/groups/messages', verifyToken,upload.single('file'),groupController.sendGroupMessage);
 
 // Get members of a specific group
 router.get('/groups/members/:groupId', verifyToken, groupController.getGroupMembers);
@@ -53,4 +54,6 @@ router.get('/users', verifyToken, groupController.getAllUsers);
 router.get('/users/search', verifyToken, groupController.searchUsers);
 
 router.get('/users/:userId',verifyToken,groupController.usersName);
+
+//router.post('/groups/upload', verifyToken,upload.single('file'),groupController.upload);
 module.exports = router;

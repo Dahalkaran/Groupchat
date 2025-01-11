@@ -29,7 +29,7 @@ io.use(socketAuth);
 io.on('connection', (socket) => {
   console.log(`A user connected: ${socket.user?.name || 'Unknown'}`);
   console.log('New client connected:', socket.id);
-  console.log("HJjghcfhcfcgf gf f   gc g    gh v   g g g hj   km,m  m km ,m ,m km l ,m ,m ,m m, km,    m m m m n n n bnb bv bv bv v v")
+  //console.log("HJjghcfhcfcgf gf f   gc g    gh v   g g g hj   km,m  m km ,m ,m km l ,m ,m ,m m, km,    m m m m n n n bnb bv bv bv v v")
   // Handle group message sending
   socket.on('sendMessage', (data) => {
     io.to(data.groupId).emit('newMessage', {

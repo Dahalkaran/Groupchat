@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chat Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-
 </head>
 <body>
   <h1>Welcome to the Chat App</h1>
+
   <!-- Groups Section -->
   <div>
     <h2>Your Groups</h2>
@@ -38,13 +38,16 @@
       <ul id="userList"></ul>
     </div>
     <div id="chatWindow" style="border: 1px solid black; height: 300px; overflow-y: scroll; margin-bottom: 10px;"></div>
+    
+    <!-- Chat Input and File Sharing Section -->
     <input type="text" id="chatMessage" placeholder="Type your message here">
+    <input type="file" id="fileInput" style="display: block;"> <!-- Hidden by default -->
+    <button id="toggleUpload">Upload</button> 
     <button id="sendMessage">Send</button>
   </div>
 
   <!-- Include the external JavaScript file -->
   <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
-
-  <script  src="/js/dashboard.js"></script>
+  <script src="/js/dashboard.js"></script>
 </body>
 </html>

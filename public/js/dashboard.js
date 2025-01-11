@@ -1,4 +1,3 @@
-//import {io} from "socket.io-client"
 document.addEventListener('DOMContentLoaded', async () => {
   const token = localStorage.getItem('authToken');
   if (!token) {
@@ -6,7 +5,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.location.href = '/users/login';
     return;
   }
- 
   const userList = document.getElementById('userList');
   const groupList = document.getElementById('groupList');
   const chatWindow = document.getElementById('chatWindow');
@@ -16,22 +14,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   const groupNameInput = document.getElementById('groupName');
   const userSelect = document.getElementById('userSelect');
   const inviteSection = document.getElementById('inviteSection');
+  const fileInput = document.getElementById('fileInput');
+  const toggleUpload = document.getElementById('toggleUpload');
   const maxStoredChats = 10;
   let selectedGroupId = null;
-  let lastMessageId = null;
-  let messageFetchInterval = null;
+  let uploadMode = false;
+toggleUpload.addEventListener('click', () => {
+  uploadMode = !uploadMode;
+  chatMessage.style.display = uploadMode ? 'none' : 'block';
+  fileInput.style.display = uploadMode ? 'block' : 'none';
+  toggleUpload.textContent = uploadMode ? 'Switch to Message' : 'Upload';
+});
   const socket = io('http://localhost:3000', {
     auth: { token },
   });
-  //console.log(socket)
-  inviteSection.style.display = 'none';
-
   const fetchUsers = async () => {
     try {
       const response = await axios.get('/users', {
         headers: { Authorization: `Bearer ${token}` },
       });
-     // console.log(response.data)
       const { users } = response.data;
       userSelect.innerHTML = '<option value="">Select User</option>';
       users.forEach((user) => {
@@ -45,13 +46,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       alert('Failed to load users.');
     }
   };
-
   const saveMessagesToLocal = (groupId, messages) => {
     const storedMessages = JSON.parse(localStorage.getItem(`chatMessages_${groupId}`)) || [];
     const existingMessageIds = new Set(storedMessages.map((msg) => msg.id));
-  
     const newMessages = messages.filter((msg) => !existingMessageIds.has(msg.id));
-  
     const formattedMessages = newMessages.map((msg) => ({
       id: msg.id,
       message: msg.message,
@@ -59,7 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       groupId: msg.groupId,
       createdAt: msg.createdAt || new Date().toISOString(), // Ensure createdAt is set
     }));
-     console.log(formattedMessages);
+   //  console.log(formattedMessages);
     const allMessages = [...storedMessages, ...formattedMessages];
     const trimmedMessages = allMessages.slice(-maxStoredChats);
     localStorage.setItem(`chatMessages_${groupId}`, JSON.stringify(trimmedMessages));
@@ -68,7 +66,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const loadMessagesFromLocal = (groupId) => {
     const storedMessages = JSON.parse(localStorage.getItem(`chatMessages_${groupId}`)) || [];
     chatWindow.innerHTML = '';
-  
     storedMessages.forEach((msg) => {
       const p = document.createElement('p');
       const sender = msg.sender ;//|| 'Unknown'; // Fallback for undefined sender
@@ -78,27 +75,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   
     return storedMessages.length > 0 ? storedMessages[storedMessages.length - 1].id : null;
   };
-  
-  
   const fetchGroups = async () => {
     try {
       const response = await axios.get('/groups', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const { groups } = response.data;
       groupList.innerHTML = '';
-      if (groups.length === 0) {
+      response.data.groups.forEach(group => {
         const li = document.createElement('li');
-        li.textContent = 'No groups available. Create a group!';
+        li.textContent = group.name;
+        li.addEventListener('click', () => selectGroup(group.id, group.name));
         groupList.appendChild(li);
-      } else {
-        groups.forEach((group) => {
-          const li = document.createElement('li');
-          li.textContent = group.name;
-          li.addEventListener('click', () => selectGroup(group.id, group.name));
-          groupList.appendChild(li);
-        });
-      }
+      });
     } catch (err) {
       console.error(err);
       alert('Failed to load groups.');
@@ -112,22 +100,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       const { members } = response.data;
-  
-      // Clear existing members
       userList.innerHTML = '';
-  
-      // Get the current user's ID from the token
       const currentUser = JSON.parse(atob(token.split('.')[1])).userId;
-  
       members.forEach((member) => {
         const li = document.createElement('li');
-  
-        // Show "You" for the current user
         const userName =
           member.id === currentUser ? `${member.name} (You)` : member.name;
         li.textContent = `${userName} (${member.email})${member.isAdmin ? ' - Admin' : ''}`;
-  
-        // Add "Make Admin" button for non-admin members (not "You")
         if (!member.isAdmin && member.id !== currentUser) {
           const makeAdminButton = document.createElement('button');
           makeAdminButton.textContent = 'Make Admin';
@@ -211,13 +190,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const response = await axios.get(`/groups/messages/${groupId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-  
-      // Save fetched messages to local storage
       saveMessagesToLocal(groupId, response.data.messages);
-  
-      // Load messages into the chat window
       loadMessagesFromLocal(groupId);
-  
       return response.data.messages;
     } catch (err) {
       console.error(err);
@@ -225,10 +199,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       return [];
     }
   };
-  
-
-  
- 
   const selectGroup = async (groupId, groupName) => {
     inviteSection.style.display = 'block';
     selectedGroupId = groupId;
@@ -240,14 +210,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     socket.emit('joinGroup', groupId); // Join the group room in socket.io
   
     await fetchGroupMembers(groupId);
-  
+
     const messages = await fetchNewMessages(groupId); // Fetch messages when selecting a group
     if (messages.length > 0) {
       lastMessageId = messages[messages.length - 1].id; // Update lastMessageId
     }
   };
-  
-
   createGroupButton.addEventListener('click', async () => {
     const name = groupNameInput.value.trim();
     if (!name) return alert('Group name is required');
@@ -266,26 +234,38 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   sendMessage.addEventListener('click', async () => {
-    const message = chatMessage.value;
-    if (!selectedGroupId) {
-      alert('Please select a group to send a message.');
-      return;
-    }
-    if (message.trim()) {
+    if (!selectedGroupId) return alert('Please select a group to send a message.');
+    if (uploadMode) {
+      const file = fileInput.files[0];
+      if (!file) return alert('Select a file to upload.');
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('groupId', selectedGroupId);
+      console.log(formData);
       try {
-        await axios.post(
-          '/groups/messages',
-          { message, groupId: selectedGroupId },
-          { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` } }
-        );
-        chatMessage.value = '';
+        await axios.post('/groups/messages', formData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        fileInput.value = '';
       } catch (err) {
         console.error(err);
-        alert('Failed to send message.');
+        alert('File upload failed.');
+      }
+    } else {
+      const message = chatMessage.value.trim();
+      if (message) {
+        try {
+          await axios.post('/groups/messages', { message, groupId: selectedGroupId }, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          chatMessage.value = '';
+        } catch (err) {
+          console.error(err);
+          alert('Failed to send message.');
+        }
       }
     }
   });
-
   document.getElementById('inviteUser').addEventListener('click', async () => {
     const userId = userSelect.value;
     if (!userId) return alert('Please select a user to invite');
@@ -307,9 +287,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
   socket.on('newMessage', async (message) => {
-    //console.log('New message received via socket:', message);
-    
-    // Fetch sender's details based on userId
     try {
       const response = await axios.get(`/users/${message.userId}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -317,6 +294,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   
       const sender = response.data.name;  // Assuming the response contains the sender's name
       if (selectedGroupId === message.groupId) {
+        // Handle file URLs specifically
+        // if (message.message.startsWith('https://')) {
+        //   // If the message is a URL (e.g., file URL from S3)
+        //   message.message = `<img src="${message.message}" alt="file" style="max-width: 100px; max-height: 100px;">`;
+        // }
+  
         // Save the message with the sender's name
         saveMessagesToLocal(message.groupId, [{ ...message, sender }]); // Ensure sender is saved
         lastMessageId = message.id; // Set lastMessageId to the ID of the new message
@@ -327,8 +310,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       alert('Failed to load sender information.');
     }
   });
-  
-  
 
   await fetchUsers();
   await fetchGroups();
