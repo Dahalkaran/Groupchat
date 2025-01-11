@@ -53,7 +53,7 @@ router.get('/users', verifyToken, groupController.getAllUsers);
 // Route to search for users
 router.get('/users/search', verifyToken, groupController.searchUsers);
 
-router.get('/users/:userId',verifyToken,groupController.usersName);
+//router.get('/users/:userId',verifyToken,groupController.usersName);
 
 //router.post('/groups/upload', verifyToken,upload.single('file'),groupController.upload);
 module.exports = router;

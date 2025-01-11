@@ -68,7 +68,7 @@ toggleUpload.addEventListener('click', () => {
     chatWindow.innerHTML = '';
     storedMessages.forEach((msg) => {
       const p = document.createElement('p');
-      const sender = msg.sender ;//|| 'Unknown'; // Fallback for undefined sender
+      const sender = msg.sender || 'Unknown'; // Fallback for undefined sender
       p.textContent = `${sender}: ${msg.message}`;
       chatWindow.appendChild(p);
     });
@@ -235,18 +235,25 @@ toggleUpload.addEventListener('click', () => {
 
   sendMessage.addEventListener('click', async () => {
     if (!selectedGroupId) return alert('Please select a group to send a message.');
+  
     if (uploadMode) {
       const file = fileInput.files[0];
       if (!file) return alert('Select a file to upload.');
+  
       const formData = new FormData();
       formData.append('file', file);
       formData.append('groupId', selectedGroupId);
-      console.log(formData);
+  
       try {
-        await axios.post('/groups/messages', formData, {
+        const response = await axios.post('/groups/messages', formData, {
           headers: { Authorization: `Bearer ${token}` },
         });
         fileInput.value = '';
+  
+        const { data } = response.data;
+        //console.log(data);
+        // Emit the message to other clients via socket
+        socket.emit('newMessage', data);
       } catch (err) {
         console.error(err);
         alert('File upload failed.');
@@ -255,17 +262,22 @@ toggleUpload.addEventListener('click', () => {
       const message = chatMessage.value.trim();
       if (message) {
         try {
-          await axios.post('/groups/messages', { message, groupId: selectedGroupId }, {
+          const response = await axios.post('/groups/messages', { message, groupId: selectedGroupId }, {
             headers: { Authorization: `Bearer ${token}` },
           });
           chatMessage.value = '';
+  
+          const { data } = response.data;
+  
+          // Emit the message to other clients via socket
+          socket.emit('newMessage', data);
         } catch (err) {
           console.error(err);
           alert('Failed to send message.');
         }
       }
     }
-  });
+  });  
   document.getElementById('inviteUser').addEventListener('click', async () => {
     const userId = userSelect.value;
     if (!userId) return alert('Please select a user to invite');
@@ -287,30 +299,23 @@ toggleUpload.addEventListener('click', () => {
     }
   });
   socket.on('newMessage', async (message) => {
-    try {
-      const response = await axios.get(`/users/${message.userId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    console.log('New message received via socket:', message);
   
-      const sender = response.data.name;  // Assuming the response contains the sender's name
-      if (selectedGroupId === message.groupId) {
-        // Handle file URLs specifically
-        // if (message.message.startsWith('https://')) {
-        //   // If the message is a URL (e.g., file URL from S3)
-        //   message.message = `<img src="${message.message}" alt="file" style="max-width: 100px; max-height: 100px;">`;
-        // }
+    const sender = message.sender || 'Unknown';
+    if (selectedGroupId === message.groupId) {
+      saveMessagesToLocal(message.groupId, [{ ...message, sender }]);
   
-        // Save the message with the sender's name
-        saveMessagesToLocal(message.groupId, [{ ...message, sender }]); // Ensure sender is saved
-        lastMessageId = message.id; // Set lastMessageId to the ID of the new message
-        loadMessagesFromLocal(message.groupId);
-      }
-    } catch (err) {
-      console.error('Failed to fetch sender details:', err);
-      alert('Failed to load sender information.');
+      const isFile = message.message.startsWith('https://') || message.message.startsWith('http://');
+      const p = document.createElement('p');
+      p.innerHTML = isFile
+        ? `<strong>${sender}</strong>: <a href="${message.message}" target="_blank">View File</a>`
+        : `<strong>${sender}</strong>: ${message.message}`;
+  
+      chatWindow.appendChild(p);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
     }
   });
-
+  
   await fetchUsers();
   await fetchGroups();
 });   

@@ -49,7 +49,7 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: 'User not authorized' });  // Incorrect password
     }
     const token = jwt.sign(
-      { userId: user.id, email: user.email }, 
+      { userId: user.id, email: user.email,name: user.name }, 
       JWT_SECRET
     );
 

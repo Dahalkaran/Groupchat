@@ -37,15 +37,15 @@ exports.createGroup = async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
-exports.usersName= async(req,res)=>{
-  try {
-    const user = await User.findByPk(req.params.userId);  // Assuming you are using Sequelize
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json({ name: user.name }); // Send the user name back
-  } catch (err) {
-    res.status(500).json({ message: 'Server error' });
-  }
-}
+// exports.usersName= async(req,res)=>{
+//   try {
+//     const user = await User.findByPk(req.params.userId);  // Assuming you are using Sequelize
+//     if (!user) return res.status(404).json({ message: 'User not found' });
+//     res.json({ name: user.name }); // Send the user name back
+//   } catch (err) {
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// }
 
 exports.getGroupMembers = async (req, res) => {
   try {
@@ -312,95 +312,68 @@ exports.getGroupMessages = async (req, res) => {
 exports.sendGroupMessage = async (req, res) => {
   const transaction = await sequelize.transaction();
   let isTransactionCommitted = false;
+
   try {
     const { message, groupId } = req.body;
     const userId = req.user.userId;
     const file = req.file;
+
     if (!groupId) {
       await transaction.rollback(); // Rollback on invalid input
       return res.status(400).json({ message: 'groupId is required' });
     }
 
-    // if (!message || !groupId) {
-    //   await transaction.rollback(); // Rollback on invalid input
-    //   return res.status(400).json({ message: 'Message and groupId are required' });
-    // }
-     
-    // Check if the user is a member of the group
+    // Check if user is a group member
     const isMember = await GroupMember.findOne({ where: { groupId, userId }, transaction });
     if (!isMember) {
       await transaction.rollback(); // Rollback if unauthorized
       return res.status(403).json({ message: 'Unauthorized access to group' });
     }
-    let newMessage;
 
-    // const newMessage = await Message.create(
-    //   { message, groupId, userId },
-    //   { transaction }
-    // );
+    let newMessage;
     if (file) {
-      // Handle file upload
       const fileName = `${Date.now()}-${file.originalname}`;
       const fileUrl = await uploadToS3(file.buffer, fileName);
       newMessage = await Message.create(
-        {
-          message: fileUrl,
-          groupId,
-          userId,
-        },
+        { message: fileUrl, groupId, userId },
         { transaction }
       );
     } else if (message) {
-      // Handle text message
       newMessage = await Message.create(
-        {
-          message,
-          groupId,
-          userId,
-        },
+        { message, groupId, userId },
         { transaction }
       );
     } else {
-      await transaction.rollback(); // Rollback if no message or file
-      return res.status(400).json({ message: 'Either message or file is required' });
+      await transaction.rollback();
+      return res.status(400).json({ message: 'Message or file is required' });
     }
+
     await transaction.commit();
     isTransactionCommitted = true;
-    //console.log(req.user.name)
-    console.log('Emitting newMessage event:', {
+
+    // Emit the new message to all group members via socket
+    const sender = await User.findByPk(userId);
+    const messageData = {
       id: newMessage.id,
       message: newMessage.message,
-      sender: req.user.name,
       groupId: newMessage.groupId,
       userId: newMessage.userId,
+      sender: sender.name,
       createdAt: newMessage.createdAt,
-      //type: file ? 'file' : 'text',
-    });
-    
+    };
 
-    if (io) {
-      io.to(groupId).emit('newMessage', {
-        id: newMessage.id,
-        message: newMessage.message,
-        sender: req.user.name,
-        groupId: newMessage.groupId,
-        userId: newMessage.userId,
-        createdAt: newMessage.createdAt,
-        //type: file ? 'file' : 'text', 
-      });
-    } else {
-      console.error('Socket.io instance is not available');
-    }
+    console.log('Message Data:', messageData); // Debugging log
+    //global.
+    io.to(groupId).emit('newMessage', messageData);
 
-    res.status(201).json({ message: 'Message sent successfully', newMessage });
+    return res.status(201).json({ message: 'Message sent successfully', data: messageData });
   } catch (err) {
-    if (!isTransactionCommitted) {
-      await transaction.rollback();
-    }
-    console.error(err);
-    res.status(500).json({ message: 'Internal server error' });
+    if (!isTransactionCommitted) await transaction.rollback();
+    console.error('Error in sendGroupMessage:', err);
+    res.status(500).json({ message: 'Failed to send message' });
   }
 };
+
 // Fetch all users
 exports.getAllUsers = async (req, res) => {
   const transaction = await sequelize.transaction();

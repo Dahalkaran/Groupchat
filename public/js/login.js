@@ -1,15 +1,12 @@
 document.getElementById('loginForm').addEventListener('submit', async function (e) {
   e.preventDefault();
-
   const email = document.getElementById('email').value;
   const password = document.getElementById('password').value;
-
   try {
     const response = await axios.post('/users/login', {
       email,
       password,
     });
-
     // Handle successful login
     if (response.status === 200) {
       alert('Login successful!');

@@ -54,7 +54,7 @@ io.on('connection', (socket) => {
 // Middleware setup
 app.use(
   cors({
-    origin: ['http://localhost:3000', 'http://localhost:8080'],
+    origin: ['http://13.238.50.191:3000', 'http://13.238.50.191:8080'],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
